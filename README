@@ -1,0 +1,8 @@
+Ouroboros is a distributed event streaming framework.
+
+This project is licensed under the BSD 3-Clause License:
+	http://www.opensource.org/licenses/BSD-3-Clause
+	
+Ouroboros is built using Maven 2.x.  You can build the project by cd'ing into the top level directory and:
+
+	$ mvn clean install
