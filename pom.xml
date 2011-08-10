@@ -9,6 +9,9 @@
     <name>Ouroboros Umbrella Module</name>
     <description>The umbrella module for Ouroboros</description>
 
+    <modules>
+        <module>spindle</module>
+    </modules>
 
     <build>
         <plugins>
@@ -22,7 +25,4 @@
             </plugin>
         </plugins>
     </build>
-    <modules>
-    	<module>spindle</module>
-    </modules>
 </project>
