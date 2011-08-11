@@ -18,21 +18,34 @@ import com.hellblazer.pinkie.SocketChannelHandler;
  * 
  */
 public class Spinner implements CommunicationsHandler {
-    private enum State {
+    public enum State {
         INITIALIZED, ACCEPTED, READ_HEADER, APPEND;
     }
 
-    private static final Logger log    = LoggerFactory.getLogger(Spinner.class);
+    private static final Logger log   = LoggerFactory.getLogger(Spinner.class);
 
-    private ByteBuffer          header = ByteBuffer.allocateDirect(EventHeader.HEADER_BYTE_SIZE);
-    private State               state  = State.INITIALIZED;
-    private FileChannel         stream;
+    private final ByteBuffer    header;
+    private State               state = State.INITIALIZED;
+    private FileChannel         segment;
     private long                remaining;
+    private long                position;
+    private final Bundle        bundle;
+
+    public Spinner(Bundle bundle) {
+        this.bundle = bundle;
+        header = ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE);
+        header.mark();
+    }
+
+    @Override
+    public void closing(SocketChannel channel) {
+    }
 
     @Override
     public void handleAccept(SocketChannel channel, SocketChannelHandler handler) {
         assert state == State.INITIALIZED;
         state = State.ACCEPTED;
+        handler.selectForRead();
     }
 
     @Override
@@ -47,25 +60,16 @@ public class Spinner implements CommunicationsHandler {
             case ACCEPTED: {
                 header.reset();
                 state = State.READ_HEADER;
-                try {
-                    readHeader(channel);
-                } catch (IOException e) {
-                    log.error("Exception during header read", e);
-                }
+                readHeader(channel);
+                break;
             }
             case READ_HEADER: {
-                try {
-                    readHeader(channel);
-                } catch (IOException e) {
-                    log.error("Exception during header read", e);
-                }
+                readHeader(channel);
+                break;
             }
             case APPEND: {
-                try {
-                    append(channel);
-                } catch (IOException e) {
-                    log.error("Exception during append", e);
-                }
+                append(channel);
+                break;
             }
             default: {
                 log.error("Invalid read state: " + state);
@@ -74,35 +78,80 @@ public class Spinner implements CommunicationsHandler {
         handler.selectForRead();
     }
 
-    private void append(SocketChannel channel) throws IOException {
-        remaining -= stream.transferFrom(channel, 0, remaining);
-        if (remaining == 0) {
-            remaining = -1L;
-            stream = null;
-            state = State.ACCEPTED;
-        }
-    }
-
-    private void readHeader(SocketChannel channel) throws IOException {
-        channel.read(header);
-        if (!header.hasRemaining()) {
-            writeHeader();
-        }
-    }
-
-    private void writeHeader() throws IOException {
-        state = State.APPEND;
-        remaining = new EventHeader(header).size();
-        stream.write(header);
-    }
-
     @Override
     public void handleWrite(SocketChannel channel, SocketChannelHandler handler) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void closing(SocketChannel channel) {
+    public String toString() {
+        return "Spinner [state=" + state + ", header=" + header + ", segment="
+               + segment + ", remaining=" + remaining + ", position="
+               + position + "]";
+    }
+
+    public State getState() {
+        return state;
+    }
+
+    private void append(SocketChannel channel) {
+        long written;
+        try {
+            written = segment.transferFrom(channel, position, remaining);
+        } catch (IOException e) {
+            log.error("Exception during append", e);
+            return;
+        }
+        position += written;
+        remaining -= written;
+        if (remaining == 0) {
+            try {
+                segment.position(position);
+            } catch (IOException e) {
+                log.error("Exception positioning segment after append", e);
+            }
+            segment = null;
+            state = State.ACCEPTED;
+        }
+    }
+
+    private void readHeader(SocketChannel channel) {
+        try {
+            channel.read(header);
+        } catch (IOException e) {
+            log.error("Exception during header read", e);
+            return;
+        }
+        if (!header.hasRemaining()) {
+            EventHeader eventHeader = new EventHeader(header);
+            segment = bundle.segmentFor(eventHeader);
+            try {
+                position = segment.size();
+            } catch (IOException e) {
+                log.error("Exception during header read", e);
+                return;
+            }
+            writeHeader();
+            remaining = eventHeader.size();
+            append(channel);
+        }
+    }
+
+    private void writeHeader() {
+        header.rewind();
+        try {
+            segment.write(header);
+        } catch (IOException e) {
+            log.error("Exception during header read", e);
+            return;
+        }
+        try {
+            position = segment.position();
+        } catch (IOException e) {
+            log.error("Exception during reading of segment position", e);
+            return;
+        }
+        state = State.APPEND;
     }
 
 }
