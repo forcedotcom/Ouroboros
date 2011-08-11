@@ -5,29 +5,15 @@ import java.nio.ByteBuffer;
 /**
  * The currency of the channels.
  * 
- * Events are identified by their 64 bit offset within a channel. Each event has
- * a header comprised of:
- * 
- * <pre>
- *      4 byte size
- *      4 byte magic
- *      8 byte tag
- *      4 byte CRC32
- * </pre>
- * 
+ * Events are identified by their 64 bit offset within a channel. 
  * The body of the event consists of uninterpreted bytes. The size of the
  * payload is the 4 byte size - <header size>
  * 
  * @author hhildebrand
  * 
  */
-public class Event {
-    static final int           SIZE_OFFSET      = 0;
-    static final int           MAGIC_OFFSET     = SIZE_OFFSET + 4;
-    static final int           TAG_OFFSET       = MAGIC_OFFSET + 4;
-    static final int           CRC_OFFSET       = TAG_OFFSET + 8;
-    static final int           HEADER_BYTE_SIZE = CRC_OFFSET + 4;
-    private static final int[] CRC_TABLE        = { 0x00000000, 0x77073096,
+public class Event extends EventHeader {
+    protected static final int[] CRC_TABLE = { 0x00000000, 0x77073096,
             0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 0xe963a535,
             0x9e6495a3, 0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
             0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91, 0x1db71064,
@@ -98,15 +84,9 @@ public class Event {
         return crc ^ 0xffffffff;
     }
 
-    private final ByteBuffer bytes;
-
-    public Event(ByteBuffer bytes) {
-        this.bytes = bytes;
-    }
-
-    public Event(long tag, int magic, ByteBuffer payload) {
+    private static ByteBuffer initialize(long tag, int magic, ByteBuffer payload) {
         int size = HEADER_BYTE_SIZE + payload.remaining();
-        bytes = ByteBuffer.allocateDirect(size);
+        ByteBuffer bytes = ByteBuffer.allocateDirect(size);
         bytes.putInt(SIZE_OFFSET, size);
         bytes.position(HEADER_BYTE_SIZE);
         bytes.put(payload);
@@ -114,19 +94,15 @@ public class Event {
         bytes.putLong(TAG_OFFSET, tag);
         payload.position(0);
         bytes.putInt(CRC_OFFSET, crc32(payload));
+        return bytes;
     }
 
-    public boolean validate() {
-        bytes.position(HEADER_BYTE_SIZE);
-        return getCrc32() == crc32(bytes);
+    public Event(ByteBuffer bytes) {
+        super(bytes);
     }
 
-    public int getCrc32() {
-        return bytes.getInt(CRC_OFFSET);
-    }
-
-    public int getMagic() {
-        return bytes.getInt(MAGIC_OFFSET);
+    public Event(long tag, int magic, ByteBuffer payload) {
+        this(initialize(tag, magic, payload));
     }
 
     public ByteBuffer getPayload() {
@@ -134,11 +110,8 @@ public class Event {
         return bytes.slice().asReadOnlyBuffer();
     }
 
-    public long getTag() {
-        return bytes.getLong(TAG_OFFSET);
-    }
-
-    public int size() {
-        return bytes.getInt(SIZE_OFFSET) - HEADER_BYTE_SIZE;
+    public boolean validate() {
+        bytes.position(HEADER_BYTE_SIZE);
+        return getCrc32() == crc32(bytes);
     }
 }
