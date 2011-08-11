@@ -41,11 +41,17 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import org.junit.Test;
 import org.mockito.internal.verification.Times;
 
+import com.hellblazer.pinkie.CommunicationsHandler;
+import com.hellblazer.pinkie.CommunicationsHandlerFactory;
+import com.hellblazer.pinkie.ServerSocketChannelHandler;
 import com.hellblazer.pinkie.SocketChannelHandler;
+import com.hellblazer.pinkie.SocketOptions;
 import com.salesforce.ouroboros.spindle.Spinner.State;
 
 /**
@@ -59,7 +65,7 @@ public class TestSpinner {
     public void testAppend() throws Exception {
         final SocketChannelHandler handler = mock(SocketChannelHandler.class);
         Bundle bundle = mock(Bundle.class);
-        File tmpFile = File.createTempFile("append-test", ".dat");
+        File tmpFile = File.createTempFile("append", ".tst");
         tmpFile.deleteOnExit();
         FileOutputStream fos = new FileOutputStream(tmpFile);
         final FileChannel writeSegment = fos.getChannel();
@@ -126,5 +132,79 @@ public class TestSpinner {
         verify(handler, new Times(3)).selectForRead();
         verify(bundle).segmentFor(isA(EventHeader.class));
         verifyNoMoreInteractions(handler, bundle);
+    }
+
+    @Test
+    public void testMultiAppend() throws Exception {
+        File tmpFile = File.createTempFile("multi-append", ".tst");
+        tmpFile.deleteOnExit();
+        FileOutputStream fos = new FileOutputStream(tmpFile);
+        final FileChannel writeSegment = fos.getChannel();
+        Bundle bundle = new Bundle() {
+            @Override
+            public FileChannel segmentFor(EventHeader header) {
+                return writeSegment;
+            }
+        };
+        final Spinner spinner = new Spinner(bundle);
+        CommunicationsHandlerFactory factory = new CommunicationsHandlerFactory() {
+            @Override
+            public CommunicationsHandler createCommunicationsHandler() {
+                return spinner;
+            }
+        };
+        SocketOptions socketOptions = new SocketOptions();
+        socketOptions.setSend_buffer_size(16);
+        socketOptions.setReceive_buffer_size(16);
+        socketOptions.setTimeout(100);
+        InetSocketAddress endpoint = new InetSocketAddress(0);
+        Executor commsExec = Executors.newFixedThreadPool(4);
+
+        ServerSocketChannelHandler handler = new ServerSocketChannelHandler(
+                                                                            "test-spinner",
+                                                                            socketOptions,
+                                                                            endpoint,
+                                                                            commsExec,
+                                                                            factory);
+        handler.start();
+        SocketChannel outbound = SocketChannel.open();
+        socketOptions.configure(outbound.socket());
+        outbound.configureBlocking(true);
+        outbound.connect(handler.getLocalAddress());
+
+        byte[][] payload = new byte[666][];
+
+        for (int i = 0; i < 666; i++) {
+            int magic = i;
+            long tag = 10 * i;
+            payload[i] = ("Give me Slack, or give me Food, or Kill me #" + i).getBytes();
+            ByteBuffer payloadBuffer = ByteBuffer.wrap(payload[i]);
+            EventHeader header = new EventHeader(payload[i].length, magic, tag,
+                                                 Event.crc32(payload[i]));
+            header.rewind();
+            header.write(outbound);
+            outbound.write(payloadBuffer);
+        }
+        outbound.close();
+        Thread.sleep(4000);
+
+        writeSegment.force(true);
+        writeSegment.close();
+
+        FileInputStream fis = new FileInputStream(tmpFile);
+        FileChannel readSegment = fis.getChannel();
+
+        for (int i = 0; i < 666; i++) {
+            Event event = new Event(readSegment);
+            assertTrue(event.validate());
+            assertEquals(i, event.getMagic());
+            assertEquals(10 * i, event.getTag());
+            assertEquals(payload[i].length, event.size());
+            ByteBuffer writtenPayload = event.getPayload();
+            for (byte b : payload[i]) {
+                assertEquals(b, writtenPayload.get());
+            }
+        }
+        readSegment.close();
     }
 }

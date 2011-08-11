@@ -59,7 +59,6 @@ public class Spinner implements CommunicationsHandler {
     public Spinner(Bundle bundle) {
         this.bundle = bundle;
         header = ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE);
-        header.mark();
     }
 
     @Override
@@ -83,7 +82,7 @@ public class Spinner implements CommunicationsHandler {
     public void handleRead(SocketChannel channel, SocketChannelHandler handler) {
         switch (state) {
             case ACCEPTED: {
-                header.reset();
+                header.clear();
                 state = State.READ_HEADER;
                 readHeader(channel);
                 break;
