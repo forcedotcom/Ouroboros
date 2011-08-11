@@ -118,6 +118,10 @@ public class TestSpinner {
         assertEquals(magic, event.getMagic());
         assertEquals(tag, event.getTag());
         assertEquals(payload.length, event.size());
+        ByteBuffer writtenPayload = event.getPayload();
+        for (byte b : payload) {
+            assertEquals(b, writtenPayload.get());
+        }
 
         verify(handler, new Times(3)).selectForRead();
         verify(bundle).segmentFor(isA(EventHeader.class));
