@@ -154,8 +154,8 @@ public class TestSpinner {
             }
         };
         SocketOptions socketOptions = new SocketOptions();
-        socketOptions.setSend_buffer_size(16);
-        socketOptions.setReceive_buffer_size(16);
+        socketOptions.setSend_buffer_size(8);
+        socketOptions.setReceive_buffer_size(8);
         socketOptions.setTimeout(100);
         InetSocketAddress endpoint = new InetSocketAddress(0);
         Executor commsExec = Executors.newFixedThreadPool(4);
@@ -183,10 +183,11 @@ public class TestSpinner {
                                                  Event.crc32(payload[i]));
             header.rewind();
             header.write(outbound);
+            Thread.sleep(1);
             outbound.write(payloadBuffer);
+            Thread.sleep(1);
         }
         outbound.close();
-        Thread.sleep(4000);
 
         writeSegment.force(true);
         writeSegment.close();

@@ -27,6 +27,7 @@ package com.salesforce.ouroboros.spindle;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
 /**
@@ -80,6 +81,26 @@ public class EventHeader {
      */
     public long getTag() {
         return bytes.getLong(TAG_OFFSET);
+    }
+
+    /**
+     * Clear the bytes
+     */
+    public void clear() {
+        bytes.clear();
+    }
+
+    /**
+     * Read the header from the channel
+     * 
+     * @param channel
+     *            - the channel to read from
+     * @return true if the header has been completely read from the channel
+     * @throws IOException
+     */
+    public boolean read(ReadableByteChannel channel) throws IOException {
+        channel.read(bytes);
+        return !bytes.hasRemaining();
     }
 
     /**

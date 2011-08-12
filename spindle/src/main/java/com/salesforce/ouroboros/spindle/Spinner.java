@@ -49,7 +49,7 @@ public class Spinner implements CommunicationsHandler {
 
     private static final Logger log   = LoggerFactory.getLogger(Spinner.class);
 
-    private final ByteBuffer    header;
+    private final EventHeader   header;
     private State               state = State.INITIALIZED;
     private FileChannel         segment;
     private long                remaining;
@@ -58,7 +58,8 @@ public class Spinner implements CommunicationsHandler {
 
     public Spinner(Bundle bundle) {
         this.bundle = bundle;
-        header = ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE);
+        header = new EventHeader(
+                                 ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE));
     }
 
     @Override
@@ -109,9 +110,8 @@ public class Spinner implements CommunicationsHandler {
 
     @Override
     public String toString() {
-        return "Spinner [state=" + state + ", header=" + header + ", segment="
-               + segment + ", remaining=" + remaining + ", position="
-               + position + "]";
+        return "Spinner [state=" + state + ", segment=" + segment
+               + ", remaining=" + remaining + ", position=" + position + "]";
     }
 
     public State getState() {
@@ -140,15 +140,15 @@ public class Spinner implements CommunicationsHandler {
     }
 
     private void readHeader(SocketChannel channel) {
+        boolean read;
         try {
-            channel.read(header);
+            read = header.read(channel);
         } catch (IOException e) {
             log.error("Exception during header read", e);
             return;
         }
-        if (!header.hasRemaining()) {
-            EventHeader eventHeader = new EventHeader(header);
-            segment = bundle.segmentFor(eventHeader);
+        if (read) {
+            segment = bundle.segmentFor(header);
             try {
                 position = segment.size();
             } catch (IOException e) {
@@ -156,7 +156,7 @@ public class Spinner implements CommunicationsHandler {
                 return;
             }
             writeHeader();
-            remaining = eventHeader.size();
+            remaining = header.size();
             append(channel);
         }
     }
@@ -164,7 +164,10 @@ public class Spinner implements CommunicationsHandler {
     private void writeHeader() {
         header.rewind();
         try {
-            segment.write(header);
+            if (!header.write(segment)) {
+                log.error(String.format("Unable to write complete header on: %s",
+                                        segment));
+            }
         } catch (IOException e) {
             log.error("Exception during header read", e);
             return;
