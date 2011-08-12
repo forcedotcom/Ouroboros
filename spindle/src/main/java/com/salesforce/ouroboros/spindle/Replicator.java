@@ -25,9 +25,13 @@
  */
 package com.salesforce.ouroboros.spindle;
 
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 
+import com.hellblazer.pinkie.CommunicationsHandler;
 import com.hellblazer.pinkie.ServerSocketChannelHandler;
+import com.hellblazer.pinkie.SocketChannelHandler;
 import com.lmax.disruptor.BatchConsumer;
 import com.lmax.disruptor.BatchHandler;
 import com.lmax.disruptor.ConsumerBarrier;
@@ -59,5 +63,43 @@ public class Replicator implements BatchHandler<EventEntry> {
 
     @Override
     public void onEndOfBatch() throws Exception {
+    }
+
+    private class CommsHandler implements CommunicationsHandler {
+
+        private final AtomicReference<SocketChannelHandler> handler = new AtomicReference<SocketChannelHandler>();
+
+        @Override
+        public void closing(SocketChannel channel) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void handleAccept(SocketChannel channel,
+                                 SocketChannelHandler handler) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void handleConnect(SocketChannel channel,
+                                  SocketChannelHandler handler) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void handleRead(SocketChannel channel) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void handleWrite(SocketChannel channel) {
+            // TODO Auto-generated method stub
+
+        }
+
     }
 }
