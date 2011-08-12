@@ -103,7 +103,7 @@ public class TestSpinner {
         Util.waitFor("Header has not been fully read", new Util.Condition() {
             @Override
             public boolean value() {
-                spinner.handleRead(inbound, handler);
+                spinner.handleRead(inbound);
                 return spinner.getState() == State.APPEND;
             }
         }, 1000, 100);
@@ -113,7 +113,7 @@ public class TestSpinner {
         Util.waitFor("Payload has not been fully read", new Util.Condition() {
             @Override
             public boolean value() {
-                spinner.handleRead(inbound, handler);
+                spinner.handleRead(inbound);
                 return spinner.getState() == State.ACCEPTED;
             }
         }, 1000, 100);

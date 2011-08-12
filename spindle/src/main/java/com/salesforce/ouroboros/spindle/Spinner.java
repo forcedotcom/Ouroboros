@@ -51,6 +51,7 @@ public class Spinner implements CommunicationsHandler {
     private static final Logger               log   = LoggerFactory.getLogger(Spinner.class);
 
     private final Bundle                      bundle;
+    private SocketChannelHandler              handler;
     private final EventHeader                 header;
     private long                              offset;
     private long                              position;
@@ -78,7 +79,8 @@ public class Spinner implements CommunicationsHandler {
     public void handleAccept(SocketChannel channel, SocketChannelHandler handler) {
         assert state == State.INITIALIZED;
         state = State.ACCEPTED;
-        handler.selectForRead();
+        this.handler = handler;
+        this.handler.selectForRead();
     }
 
     @Override
@@ -88,7 +90,7 @@ public class Spinner implements CommunicationsHandler {
     }
 
     @Override
-    public void handleRead(SocketChannel channel, SocketChannelHandler handler) {
+    public void handleRead(SocketChannel channel) {
         switch (state) {
             case ACCEPTED: {
                 header.clear();
@@ -112,7 +114,7 @@ public class Spinner implements CommunicationsHandler {
     }
 
     @Override
-    public void handleWrite(SocketChannel channel, SocketChannelHandler handler) {
+    public void handleWrite(SocketChannel channel) {
         throw new UnsupportedOperationException();
     }
 

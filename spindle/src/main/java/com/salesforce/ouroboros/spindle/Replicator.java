@@ -27,6 +27,7 @@ package com.salesforce.ouroboros.spindle;
 
 import java.util.concurrent.Executor;
 
+import com.hellblazer.pinkie.ServerSocketChannelHandler;
 import com.lmax.disruptor.BatchConsumer;
 import com.lmax.disruptor.BatchHandler;
 import com.lmax.disruptor.ConsumerBarrier;
@@ -38,13 +39,16 @@ import com.lmax.disruptor.ConsumerBarrier;
  * 
  */
 public class Replicator implements BatchHandler<EventEntry> {
-    private final Executor executor;
+    private final Executor                   executor;
+    private final ServerSocketChannelHandler commsHandler;
 
-    public Replicator(ConsumerBarrier<EventEntry> consumerBarrier,
+    public Replicator(ServerSocketChannelHandler commsHandler,
+                      ConsumerBarrier<EventEntry> consumerBarrier,
                       Executor executor) {
         BatchConsumer<EventEntry> batchConsumer = new BatchConsumer<EventEntry>(
                                                                                 consumerBarrier,
                                                                                 this);
+        this.commsHandler = commsHandler;
         this.executor = executor;
         this.executor.execute(batchConsumer);
     }
