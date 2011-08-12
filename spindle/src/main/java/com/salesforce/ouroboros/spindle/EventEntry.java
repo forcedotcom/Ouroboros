@@ -25,8 +25,6 @@
  */
 package com.salesforce.ouroboros.spindle;
 
-import java.nio.channels.FileChannel;
-
 import com.lmax.disruptor.AbstractEntry;
 import com.lmax.disruptor.EntryFactory;
 
@@ -38,7 +36,7 @@ import com.lmax.disruptor.EntryFactory;
  */
 public class EventEntry extends AbstractEntry {
     private long                                 offset;
-    private FileChannel                          channel;
+    private EventHeader                          header;
 
     public final static EntryFactory<EventEntry> ENTRY_FACTORY = new EntryFactory<EventEntry>() {
                                                                    @Override
@@ -47,16 +45,16 @@ public class EventEntry extends AbstractEntry {
                                                                    }
                                                                };
 
-    public FileChannel getChannel() {
-        return channel;
+    public EventHeader getHeader() {
+        return header;
     }
 
     public long getOffset() {
         return offset;
     }
 
-    public void setChannel(FileChannel channel) {
-        this.channel = channel;
+    public void setHeader(EventHeader header) {
+        this.header = header;
     }
 
     public void setOffset(long offset) {

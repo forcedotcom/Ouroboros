@@ -34,6 +34,7 @@ import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
+import java.util.UUID;
 
 import org.junit.Test;
 
@@ -48,9 +49,10 @@ public class TestEvent {
         byte[] src = new byte[23];
         Arrays.fill(src, (byte) 7);
         ByteBuffer payload = ByteBuffer.wrap(src);
-        Event event = new Event(777, 666L, payload);
+        UUID tag = UUID.randomUUID();
+        Event event = new Event(777, tag, payload);
         assertEquals(src.length, event.size());
-        assertEquals(666L, event.getTag());
+        assertEquals(tag, event.getTag());
         assertEquals(777, event.getMagic());
         assertEquals(Event.crc32(src), event.getCrc32());
         assertTrue(event.validate());
@@ -59,7 +61,7 @@ public class TestEvent {
     @Test
     public void testReadWrite() throws Exception {
         int magic = 666;
-        long tag = 777L;
+        UUID tag = UUID.randomUUID();
         byte[] payload = "Give me Slack, or give me Food, or Kill me".getBytes();
         ByteBuffer payloadBuffer = ByteBuffer.wrap(payload);
         Event written = new Event(magic, tag, payloadBuffer);

@@ -35,12 +35,14 @@ import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -52,6 +54,8 @@ import com.hellblazer.pinkie.CommunicationsHandlerFactory;
 import com.hellblazer.pinkie.ServerSocketChannelHandler;
 import com.hellblazer.pinkie.SocketChannelHandler;
 import com.hellblazer.pinkie.SocketOptions;
+import com.lmax.disruptor.ProducerBarrier;
+import com.lmax.disruptor.SequenceBatch;
 import com.salesforce.ouroboros.spindle.Spinner.State;
 
 /**
@@ -65,12 +69,16 @@ public class TestSpinner {
     public void testAppend() throws Exception {
         final SocketChannelHandler handler = mock(SocketChannelHandler.class);
         Bundle bundle = mock(Bundle.class);
+        @SuppressWarnings("unchecked")
+        ProducerBarrier<EventEntry> producerBarrier = mock(ProducerBarrier.class);
         File tmpFile = File.createTempFile("append", ".tst");
         tmpFile.deleteOnExit();
         FileOutputStream fos = new FileOutputStream(tmpFile);
         final FileChannel writeSegment = fos.getChannel();
         when(bundle.segmentFor(isA(EventHeader.class))).thenReturn(writeSegment);
-        final Spinner spinner = new Spinner(bundle);
+        EventEntry entry = new EventEntry();
+        when(producerBarrier.nextEntry()).thenReturn(entry);
+        final Spinner spinner = new Spinner(bundle, producerBarrier);
         ServerSocketChannel server = ServerSocketChannel.open();
         server.configureBlocking(true);
         server.socket().bind(new InetSocketAddress(0));
@@ -84,7 +92,7 @@ public class TestSpinner {
         assertEquals(Spinner.State.ACCEPTED, spinner.getState());
 
         int magic = 666;
-        long tag = 777L;
+        UUID tag = UUID.randomUUID();
         byte[] payload = "Give me Slack, or give me Food, or Kill me".getBytes();
         ByteBuffer payloadBuffer = ByteBuffer.wrap(payload);
         EventHeader header = new EventHeader(payload.length, magic, tag,
@@ -110,11 +118,9 @@ public class TestSpinner {
             }
         }, 1000, 100);
 
-        writeSegment.force(true);
         outbound.close();
         inbound.close();
         server.close();
-        writeSegment.close();
 
         FileInputStream fis = new FileInputStream(tmpFile);
         FileChannel readSegment = fis.getChannel();
@@ -131,22 +137,29 @@ public class TestSpinner {
 
         verify(handler, new Times(3)).selectForRead();
         verify(bundle).segmentFor(isA(EventHeader.class));
-        verifyNoMoreInteractions(handler, bundle);
+        verify(producerBarrier).nextEntry();
+        verify(producerBarrier).commit(entry);
+        verifyNoMoreInteractions(handler, bundle, producerBarrier);
     }
 
     @Test
     public void testMultiAppend() throws Exception {
-        File tmpFile = File.createTempFile("multi-append", ".tst");
+        final File tmpFile = File.createTempFile("multi-append", ".tst");
         tmpFile.deleteOnExit();
-        FileOutputStream fos = new FileOutputStream(tmpFile);
-        final FileChannel writeSegment = fos.getChannel();
         Bundle bundle = new Bundle() {
             @Override
             public FileChannel segmentFor(EventHeader header) {
-                return writeSegment;
+                FileOutputStream fos;
+                try {
+                    fos = new FileOutputStream(tmpFile, true);
+                } catch (FileNotFoundException e) {
+                    throw new IllegalStateException();
+                }
+                return fos.getChannel();
             }
         };
-        final Spinner spinner = new Spinner(bundle);
+        ProducerBarrier<EventEntry> barrier = new Barrier();
+        final Spinner spinner = new Spinner(bundle, barrier);
         CommunicationsHandlerFactory factory = new CommunicationsHandlerFactory() {
             @Override
             public CommunicationsHandler createCommunicationsHandler() {
@@ -176,7 +189,7 @@ public class TestSpinner {
 
         for (int i = 0; i < 666; i++) {
             int magic = i;
-            long tag = 10 * i;
+            UUID tag = new UUID(0, i);
             payload[i] = ("Give me Slack, or give me Food, or Kill me #" + i).getBytes();
             ByteBuffer payloadBuffer = ByteBuffer.wrap(payload[i]);
             EventHeader header = new EventHeader(payload[i].length, magic, tag,
@@ -189,9 +202,6 @@ public class TestSpinner {
         }
         outbound.close();
 
-        writeSegment.force(true);
-        writeSegment.close();
-
         FileInputStream fis = new FileInputStream(tmpFile);
         FileChannel readSegment = fis.getChannel();
 
@@ -199,7 +209,7 @@ public class TestSpinner {
             Event event = new Event(readSegment);
             assertTrue(event.validate());
             assertEquals(i, event.getMagic());
-            assertEquals(10 * i, event.getTag());
+            assertEquals(new UUID(0, i), event.getTag());
             assertEquals(payload[i].length, event.size());
             ByteBuffer writtenPayload = event.getPayload();
             for (byte b : payload[i]) {
@@ -208,4 +218,35 @@ public class TestSpinner {
         }
         readSegment.close();
     }
+
+    private static class Barrier implements ProducerBarrier<EventEntry> {
+
+        @Override
+        public void commit(SequenceBatch sequenceBatch) {
+        }
+
+        @Override
+        public void commit(EventEntry entry) {
+        }
+
+        @Override
+        public long getCursor() {
+            return 0;
+        }
+
+        @Override
+        public EventEntry getEntry(long sequence) {
+            return null;
+        }
+
+        @Override
+        public SequenceBatch nextEntries(SequenceBatch sequenceBatch) {
+            return null;
+        }
+
+        @Override
+        public EventEntry nextEntry() {
+            return new EventEntry();
+        }
+    };
 }

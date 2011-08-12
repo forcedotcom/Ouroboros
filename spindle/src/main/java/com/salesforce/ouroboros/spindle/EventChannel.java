@@ -25,15 +25,21 @@
  */
 package com.salesforce.ouroboros.spindle;
 
-import java.nio.channels.FileChannel;
+import java.util.UUID;
 
 /**
  * 
  * @author hhildebrand
  * 
  */
-public class Channel {
-    public FileChannel segmentFor(EventHeader header) {
-        return null;
+public class EventChannel {
+    private final UUID tag;
+
+    public EventChannel(UUID tag) {
+        this.tag = tag;
+    }
+
+    public UUID getTag() {
+        return tag;
     }
 }

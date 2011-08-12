@@ -28,6 +28,7 @@ package com.salesforce.ouroboros.spindle;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
+import java.util.UUID;
 
 /**
  * The currency of the channels.
@@ -126,7 +127,7 @@ public class Event extends EventHeader {
         ByteBuffer event = ByteBuffer.allocate(eventTotalSize);
         event.put(header);
         read = channel.read(event);
-        if (read != (eventTotalSize - HEADER_BYTE_SIZE)) {
+        if (read != eventTotalSize - HEADER_BYTE_SIZE) {
             throw new IllegalStateException(
                                             String.format("Unable to completely read the payload, bytes read: %s, expected: %s",
                                                           read, eventTotalSize));
@@ -138,13 +139,19 @@ public class Event extends EventHeader {
         super(bytes);
     }
 
-    public Event(int magic, long tag, ByteBuffer payload) {
+    public Event(int magic, UUID tag, ByteBuffer payload) {
         this(ByteBuffer.allocate(HEADER_BYTE_SIZE + payload.remaining()));
         initialize(payload.remaining(), magic, tag, payload);
     }
 
     public Event(ReadableByteChannel channel) throws IOException {
         this(readFrom(channel));
+    }
+
+    public Event clone() {
+        ByteBuffer duplicateBytes = ByteBuffer.allocate(HEADER_BYTE_SIZE);
+        duplicateBytes.put(bytes);
+        return new Event(duplicateBytes);
     }
 
     /**
@@ -163,7 +170,7 @@ public class Event extends EventHeader {
         return getCrc32() == crc32(bytes);
     }
 
-    protected void initialize(int size, int magic, long tag, ByteBuffer payload) {
+    protected void initialize(int size, int magic, UUID tag, ByteBuffer payload) {
         initialize(payload.remaining(), magic, tag, crc32(payload));
         payload.position(0);
         bytes.put(payload);

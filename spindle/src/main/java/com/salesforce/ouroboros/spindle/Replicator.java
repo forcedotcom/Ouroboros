@@ -25,23 +25,35 @@
  */
 package com.salesforce.ouroboros.spindle;
 
-import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
+
+import com.lmax.disruptor.BatchConsumer;
+import com.lmax.disruptor.BatchHandler;
+import com.lmax.disruptor.ConsumerBarrier;
 
 /**
- * An event that has been identified within a channel
+ * A replicator of event streams
  * 
  * @author hhildebrand
  * 
  */
-public class IdentifiedEvent extends Event {
-    private final long id;
+public class Replicator implements BatchHandler<EventEntry> {
+    private final Executor executor;
 
-    public IdentifiedEvent(long id, ByteBuffer bytes) {
-        super(bytes);
-        this.id = id;
+    public Replicator(ConsumerBarrier<EventEntry> consumerBarrier,
+                      Executor executor) {
+        BatchConsumer<EventEntry> batchConsumer = new BatchConsumer<EventEntry>(
+                                                                                consumerBarrier,
+                                                                                this);
+        this.executor = executor;
+        this.executor.execute(batchConsumer);
     }
 
-    public long getId() {
-        return id;
+    @Override
+    public void onAvailable(EventEntry entry) throws Exception {
+    }
+
+    @Override
+    public void onEndOfBatch() throws Exception {
     }
 }

@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.UUID;
 
 /**
  * An event header comprised of:
@@ -43,12 +44,13 @@ import java.nio.channels.WritableByteChannel;
  * @author hhildebrand
  * 
  */
-public class EventHeader {
+public class EventHeader implements Cloneable {
 
     protected static final int SIZE_OFFSET      = 0;
     protected static final int MAGIC_OFFSET     = SIZE_OFFSET + 4;
-    protected static final int TAG_OFFSET       = MAGIC_OFFSET + 4;
-    protected static final int CRC_OFFSET       = TAG_OFFSET + 8;
+    protected static final int TAG1_OFFSET      = MAGIC_OFFSET + 4;
+    protected static final int TAG2_OFFSET      = TAG1_OFFSET + 8;
+    protected static final int CRC_OFFSET       = TAG2_OFFSET + 8;
     protected static final int HEADER_BYTE_SIZE = CRC_OFFSET + 4;
 
     protected final ByteBuffer bytes;
@@ -57,9 +59,23 @@ public class EventHeader {
         this.bytes = bytes;
     }
 
-    public EventHeader(int size, int magic, long tag, int crc32) {
+    public EventHeader(int size, int magic, UUID tag, int crc32) {
         this(ByteBuffer.allocate(HEADER_BYTE_SIZE));
         initialize(size, magic, tag, crc32);
+    }
+
+    /**
+     * Clear the bytes
+     */
+    public void clear() {
+        bytes.clear();
+    }
+
+    @Override
+    public EventHeader clone() {
+        ByteBuffer duplicateBytes = ByteBuffer.allocate(HEADER_BYTE_SIZE);
+        duplicateBytes.put(bytes);
+        return new EventHeader(duplicateBytes);
     }
 
     /**
@@ -79,15 +95,8 @@ public class EventHeader {
     /**
      * @return the value the header is tagged with
      */
-    public long getTag() {
-        return bytes.getLong(TAG_OFFSET);
-    }
-
-    /**
-     * Clear the bytes
-     */
-    public void clear() {
-        bytes.clear();
+    public UUID getTag() {
+        return new UUID(bytes.getLong(TAG1_OFFSET), bytes.getLong(TAG2_OFFSET));
     }
 
     /**
@@ -132,7 +141,7 @@ public class EventHeader {
         return !bytes.hasRemaining();
     }
 
-    protected void initialize(int size, int magic, long tag, int crc32) {
-        bytes.putInt(size + HEADER_BYTE_SIZE).putInt(magic).putLong(tag).putInt(crc32);
+    protected void initialize(int size, int magic, UUID tag, int crc32) {
+        bytes.putInt(size + HEADER_BYTE_SIZE).putInt(magic).putLong(tag.getMostSignificantBits()).putLong(tag.getLeastSignificantBits()).putInt(crc32);
     }
 }

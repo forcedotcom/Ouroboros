@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import com.hellblazer.pinkie.CommunicationsHandler;
 import com.hellblazer.pinkie.SocketChannelHandler;
+import com.lmax.disruptor.ProducerBarrier;
 
 /**
  * An append sink for a channel.
@@ -44,26 +45,33 @@ import com.hellblazer.pinkie.SocketChannelHandler;
  */
 public class Spinner implements CommunicationsHandler {
     public enum State {
-        INITIALIZED, ACCEPTED, READ_HEADER, APPEND;
+        ACCEPTED, APPEND, INITIALIZED, READ_HEADER;
     }
 
-    private static final Logger log   = LoggerFactory.getLogger(Spinner.class);
+    private static final Logger               log   = LoggerFactory.getLogger(Spinner.class);
 
-    private final EventHeader   header;
-    private State               state = State.INITIALIZED;
-    private FileChannel         segment;
-    private long                remaining;
-    private long                position;
-    private final Bundle        bundle;
+    private final Bundle                      bundle;
+    private final EventHeader                 header;
+    private long                              offset;
+    private long                              position;
+    private final ProducerBarrier<EventEntry> producerBarrier;
+    private long                              remaining;
+    private FileChannel                       segment;
+    private State                             state = State.INITIALIZED;
 
-    public Spinner(Bundle bundle) {
+    public Spinner(Bundle bundle, ProducerBarrier<EventEntry> producerBarrier) {
         this.bundle = bundle;
+        this.producerBarrier = producerBarrier;
         header = new EventHeader(
                                  ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE));
     }
 
     @Override
     public void closing(SocketChannel channel) {
+    }
+
+    public State getState() {
+        return state;
     }
 
     @Override
@@ -114,10 +122,6 @@ public class Spinner implements CommunicationsHandler {
                + ", remaining=" + remaining + ", position=" + position + "]";
     }
 
-    public State getState() {
-        return state;
-    }
-
     private void append(SocketChannel channel) {
         long written;
         try {
@@ -130,12 +134,16 @@ public class Spinner implements CommunicationsHandler {
         remaining -= written;
         if (remaining == 0) {
             try {
-                segment.position(position);
+                segment.close();
             } catch (IOException e) {
-                log.error("Exception positioning segment after append", e);
+                log.error("Exception closing segment", e);
             }
             segment = null;
             state = State.ACCEPTED;
+            EventEntry entry = producerBarrier.nextEntry();
+            entry.setHeader(header);
+            entry.setOffset(offset);
+            producerBarrier.commit(entry);
         }
     }
 
@@ -150,7 +158,7 @@ public class Spinner implements CommunicationsHandler {
         if (read) {
             segment = bundle.segmentFor(header);
             try {
-                position = segment.size();
+                offset = position = segment.size();
             } catch (IOException e) {
                 log.error("Exception during header read", e);
                 return;
