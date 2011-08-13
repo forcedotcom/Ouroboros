@@ -27,6 +27,7 @@ package com.salesforce.ouroboros.spindle;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.UUID;
@@ -99,6 +100,10 @@ public class EventHeader implements Cloneable {
         return new UUID(bytes.getLong(TAG1_OFFSET), bytes.getLong(TAG2_OFFSET));
     }
 
+    protected void initialize(int size, int magic, UUID tag, int crc32) {
+        bytes.putInt(size + HEADER_BYTE_SIZE).putInt(magic).putLong(tag.getMostSignificantBits()).putLong(tag.getLeastSignificantBits()).putInt(crc32);
+    }
+
     /**
      * Read the header from the channel
      * 
@@ -117,6 +122,20 @@ public class EventHeader implements Cloneable {
      */
     public void rewind() {
         bytes.rewind();
+    }
+
+    /**
+     * Position the channel at the start of the event's payload
+     * 
+     * @param offset
+     *            - the offset of the event in the channel
+     * @param segment
+     *            - the source
+     * @throws IOException
+     */
+    public void seekToPayload(long offset, FileChannel segment)
+                                                               throws IOException {
+        segment.position(offset + HEADER_BYTE_SIZE);
     }
 
     /**
@@ -139,9 +158,5 @@ public class EventHeader implements Cloneable {
     public boolean write(WritableByteChannel channel) throws IOException {
         channel.write(bytes);
         return !bytes.hasRemaining();
-    }
-
-    protected void initialize(int size, int magic, UUID tag, int crc32) {
-        bytes.putInt(size + HEADER_BYTE_SIZE).putInt(magic).putLong(tag.getMostSignificantBits()).putLong(tag.getLeastSignificantBits()).putInt(crc32);
     }
 }
