@@ -55,7 +55,6 @@ import com.hellblazer.pinkie.ServerSocketChannelHandler;
 import com.hellblazer.pinkie.SocketChannelHandler;
 import com.hellblazer.pinkie.SocketOptions;
 import com.lmax.disruptor.ProducerBarrier;
-import com.lmax.disruptor.SequenceBatch;
 import com.salesforce.ouroboros.spindle.Spinner.State;
 
 /**
@@ -158,7 +157,7 @@ public class TestSpinner {
                 return fos.getChannel();
             }
         };
-        ProducerBarrier<EventEntry> barrier = new Barrier();
+        ProducerBarrier<EventEntry> barrier = new PBarrier();
         final Spinner spinner = new Spinner(bundle, barrier);
         CommunicationsHandlerFactory factory = new CommunicationsHandlerFactory() {
             @Override
@@ -217,36 +216,5 @@ public class TestSpinner {
             }
         }
         readSegment.close();
-    }
-
-    private static class Barrier implements ProducerBarrier<EventEntry> {
-
-        @Override
-        public void commit(SequenceBatch sequenceBatch) {
-        }
-
-        @Override
-        public void commit(EventEntry entry) {
-        }
-
-        @Override
-        public long getCursor() {
-            return 0;
-        }
-
-        @Override
-        public EventEntry getEntry(long sequence) {
-            return null;
-        }
-
-        @Override
-        public SequenceBatch nextEntries(SequenceBatch sequenceBatch) {
-            return null;
-        }
-
-        @Override
-        public EventEntry nextEntry() {
-            return new EventEntry();
-        }
     };
 }

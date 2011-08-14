@@ -153,6 +153,8 @@ public final class Replicator implements CommunicationsHandler {
     public void handleConnect(SocketChannel channel,
                               final SocketChannelHandler handler) {
         this.handler.set(handler);
+        running.set(true);
+        evaluate();
     }
 
     @Override
@@ -166,7 +168,7 @@ public final class Replicator implements CommunicationsHandler {
             case WRITE_HEADER: {
                 try {
                     if (replicatedState.get().writeHeader()) {
-
+                        state.set(State.WRITE_PAYLOAD);
                     }
                 } catch (IOException e) {
                     ReplicatedState rs = replicatedState.get();
@@ -179,11 +181,7 @@ public final class Replicator implements CommunicationsHandler {
                 try {
                     if (replicatedState.get().writePayload(channel)) {
                         state.set(State.WAITING);
-                        executor.execute(new Runnable() {
-                            public void run() {
-                                processNext();
-                            }
-                        });
+                        evaluate();
                     }
                 } catch (IOException e) {
                     ReplicatedState rs = replicatedState.get();
@@ -197,10 +195,17 @@ public final class Replicator implements CommunicationsHandler {
         }
     }
 
-    private void processNext() {
-        if (!running.get()) {
-            return;
+    private void evaluate() {
+        if (running.get()) {
+            executor.execute(new Runnable() {
+                public void run() {
+                    processNext();
+                }
+            });
         }
+    }
+
+    void processNext() {
         long nextSequence = sequence.get() + 1;
         try {
             try {
@@ -229,17 +234,5 @@ public final class Replicator implements CommunicationsHandler {
         }
         state.set(State.WRITE_HEADER);
         handler.get().selectForWrite();
-    }
-
-    public void start() {
-        if (!running.compareAndSet(false, true)) {
-            return;
-        }
-        executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                processNext();
-            }
-        });
     }
 }
