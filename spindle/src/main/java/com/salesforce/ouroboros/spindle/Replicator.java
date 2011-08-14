@@ -72,18 +72,18 @@ public final class Replicator implements CommunicationsHandler {
             header.seekToPayload(offset, segment);
         }
 
-        public boolean writeHeader() throws IOException {
-            return header.write(segment);
+        public boolean writeHeader(SocketChannel channel) throws IOException {
+            return header.write(channel);
         }
 
         public boolean writePayload(SocketChannel channel) throws IOException {
             int remaining = payloadRemaining.get();
             long position = header.size() - remaining;
             int written = (int) segment.transferTo(position, remaining, channel);
-            if (written == 0) {
+            payloadRemaining.set(remaining - written);
+            if (payloadRemaining.get() == 0) {
                 return true;
             }
-            payloadRemaining.set(remaining - written);
             return false;
         }
     }
@@ -167,7 +167,7 @@ public final class Replicator implements CommunicationsHandler {
         switch (state.get()) {
             case WRITE_HEADER: {
                 try {
-                    if (replicatedState.get().writeHeader()) {
+                    if (replicatedState.get().writeHeader(channel)) {
                         state.set(State.WRITE_PAYLOAD);
                     }
                 } catch (IOException e) {
@@ -222,7 +222,8 @@ public final class Replicator implements CommunicationsHandler {
     }
 
     private void replicate(EventEntry entry) {
-        EventHeader header = entry.getHeader();
+        EventHeader header = entry.getHeader().clone();
+        header.rewind();
         ReplicatedState rs = new ReplicatedState(entry.getOffset(), header,
                                                  bundle.segmentFor(header));
         replicatedState.set(rs);

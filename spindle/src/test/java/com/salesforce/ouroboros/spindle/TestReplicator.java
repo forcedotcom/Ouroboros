@@ -27,6 +27,7 @@ package com.salesforce.ouroboros.spindle;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertTrue;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -68,13 +69,15 @@ public class TestReplicator {
         UUID tag = UUID.randomUUID();
         byte[] payload = "Give me Slack, or give me Food, or Kill me".getBytes();
         ByteBuffer payloadBuffer = ByteBuffer.wrap(payload);
-        Event header = new Event(magic, tag, payloadBuffer);
-        header.rewind();
-        header.write(segment);
+        EventHeader event = new EventHeader(payload.length, magic, tag,
+                                            Event.crc32(payload));
+        event.rewind();
+        event.write(segment);
+        segment.write(payloadBuffer);
         segment.force(false);
 
         EventEntry entry = new EventEntry();
-        entry.setHeader(header);
+        entry.setHeader(event);
         entry.setOffset(0);
 
         Bundle bundle = mock(Bundle.class);
@@ -82,7 +85,7 @@ public class TestReplicator {
         ConsumerBarrier<EventEntry> consumerBarrier = mock(ConsumerBarrier.class);
         SocketChannelHandler handler = mock(SocketChannelHandler.class);
 
-        when(bundle.segmentFor(header)).thenReturn(segment);
+        when(bundle.segmentFor(isA(EventHeader.class))).thenReturn(segment, segment);
         when(consumerBarrier.waitFor(0)).thenReturn(0L).thenThrow(AlertException.ALERT_EXCEPTION);
         when(consumerBarrier.getEntry(0)).thenReturn(entry);
 
@@ -105,20 +108,21 @@ public class TestReplicator {
         inbound.configureBlocking(true);
 
         assertTrue(inbound.isConnected());
-        // outbound.configureBlocking(false);
-        // inbound.configureBlocking(false);
+        outbound.configureBlocking(false);
+        inbound.configureBlocking(false);
         final ByteBuffer replicated = ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE
                                                           + payload.length);
         Thread inboundRead = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    for (inbound.read(replicated); replicated.hasRemaining();)
+                    for (inbound.read(replicated); replicated.hasRemaining(); inbound.read(replicated)) {
                         try {
                             Thread.sleep(10);
                         } catch (InterruptedException e) {
                             return;
                         }
+                    }
                 } catch (IOException e) {
                     throw new IllegalStateException(e);
                 }
@@ -136,16 +140,13 @@ public class TestReplicator {
         replicator.halt();
         Util.waitFor("Never achieved WRITE_PAYLOAD state",
                      new Util.Condition() {
-
                          @Override
                          public boolean value() {
                              replicator.handleWrite(outbound);
                              return State.WRITE_PAYLOAD == replicator.getState();
                          }
                      }, 1000L, 100L);
-        replicator.handleWrite(outbound);
         Util.waitFor("Never achieved WAITING state", new Util.Condition() {
-
             @Override
             public boolean value() {
                 replicator.handleWrite(outbound);
@@ -153,7 +154,13 @@ public class TestReplicator {
             }
         }, 1000L, 100L);
         inboundRead.join(4000);
+        replicated.flip();
+        assertTrue(replicated.hasRemaining());
 
-        // assertFalse(replicated.hasRemaining());
+        Event replicatedEvent = new Event(replicated);
+        assertEquals(event.size(), replicatedEvent.size());
+        assertEquals(event.getMagic(), replicatedEvent.getMagic());
+        assertEquals(event.getCrc32(), replicatedEvent.getCrc32());
+        assertTrue(replicatedEvent.validate());
     }
 }

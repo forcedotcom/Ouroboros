@@ -150,6 +150,7 @@ public class Event extends EventHeader {
 
     public Event clone() {
         ByteBuffer duplicateBytes = ByteBuffer.allocate(HEADER_BYTE_SIZE);
+        bytes.rewind();
         duplicateBytes.put(bytes);
         return new Event(duplicateBytes);
     }
@@ -158,6 +159,7 @@ public class Event extends EventHeader {
      * @return the read only buffer containing the event's payload
      */
     public ByteBuffer getPayload() {
+        bytes.rewind();
         bytes.position(HEADER_BYTE_SIZE);
         return bytes.slice().asReadOnlyBuffer();
     }
@@ -166,13 +168,13 @@ public class Event extends EventHeader {
      * @return true if the payload's CRC matches the CRC in the header
      */
     public boolean validate() {
-        bytes.position(HEADER_BYTE_SIZE);
+        bytes.rewind();
         return getCrc32() == crc32(bytes);
     }
 
     protected void initialize(int size, int magic, UUID tag, ByteBuffer payload) {
         initialize(payload.remaining(), magic, tag, crc32(payload));
-        payload.position(0);
+        payload.rewind();
         bytes.put(payload);
     }
 }
