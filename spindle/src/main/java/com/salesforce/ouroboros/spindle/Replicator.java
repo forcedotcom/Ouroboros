@@ -58,6 +58,7 @@ public final class Replicator implements CommunicationsHandler {
 
         final long          offset;
         final AtomicInteger payloadRemaining;
+        final AtomicLong position;
         final FileChannel   segment;
 
         public ReplicatedState(long offset, EventHeader header,
@@ -66,6 +67,7 @@ public final class Replicator implements CommunicationsHandler {
             this.header = header;
             this.segment = segment;
             payloadRemaining = new AtomicInteger(header.size());
+            position = new AtomicLong(Event.HEADER_BYTE_SIZE + offset);
         }
 
         public void seekToPayload() throws IOException {
@@ -78,9 +80,10 @@ public final class Replicator implements CommunicationsHandler {
 
         public boolean writePayload(SocketChannel channel) throws IOException {
             int remaining = payloadRemaining.get();
-            long position = header.size() - remaining;
-            int written = (int) segment.transferTo(position, remaining, channel);
+            long p = position.get();
+            int written = (int) segment.transferTo(p, remaining, channel);
             payloadRemaining.set(remaining - written);
+            position.set(p + written);
             if (payloadRemaining.get() == 0) {
                 return true;
             }

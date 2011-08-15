@@ -75,6 +75,7 @@ public class EventHeader implements Cloneable {
     @Override
     public EventHeader clone() {
         ByteBuffer duplicateBytes = ByteBuffer.allocate(HEADER_BYTE_SIZE);
+        bytes.rewind();
         duplicateBytes.put(bytes);
         return new EventHeader(duplicateBytes);
     }

@@ -67,7 +67,7 @@ public class TestReplicator {
 
         int magic = 666;
         UUID tag = UUID.randomUUID();
-        byte[] payload = "Give me Slack, or give me Food, or Kill me".getBytes();
+        final byte[] payload = "Give me Slack, or give me Food, or Kill me".getBytes();
         ByteBuffer payloadBuffer = ByteBuffer.wrap(payload);
         EventHeader event = new EventHeader(payload.length, magic, tag,
                                             Event.crc32(payload));
@@ -85,7 +85,8 @@ public class TestReplicator {
         ConsumerBarrier<EventEntry> consumerBarrier = mock(ConsumerBarrier.class);
         SocketChannelHandler handler = mock(SocketChannelHandler.class);
 
-        when(bundle.segmentFor(isA(EventHeader.class))).thenReturn(segment, segment);
+        when(bundle.segmentFor(isA(EventHeader.class))).thenReturn(segment,
+                                                                   segment);
         when(consumerBarrier.waitFor(0)).thenReturn(0L).thenThrow(AlertException.ALERT_EXCEPTION);
         when(consumerBarrier.getEntry(0)).thenReturn(entry);
 
@@ -108,21 +109,25 @@ public class TestReplicator {
         inbound.configureBlocking(true);
 
         assertTrue(inbound.isConnected());
-        outbound.configureBlocking(false);
-        inbound.configureBlocking(false);
+        outbound.configureBlocking(true);
+        inbound.configureBlocking(true);
         final ByteBuffer replicated = ByteBuffer.allocate(EventHeader.HEADER_BYTE_SIZE
                                                           + payload.length);
         Thread inboundRead = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    for (inbound.read(replicated); replicated.hasRemaining(); inbound.read(replicated)) {
+                    int read = 0;
+                    for (read += inbound.read(replicated); read < EventHeader.HEADER_BYTE_SIZE
+                                                                  + payload.length; read += inbound.read(replicated)) {
+                        System.out.println("read: " + read);
                         try {
                             Thread.sleep(10);
                         } catch (InterruptedException e) {
                             return;
                         }
                     }
+                    System.out.println("read: " + read);
                 } catch (IOException e) {
                     throw new IllegalStateException(e);
                 }
